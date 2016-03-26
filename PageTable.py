@@ -5,12 +5,13 @@ from itertools import cycle
 class PageTableEntry(object):
     def __init__(self, page, mode):
         self.page = page
-
         self.frame = None
 
         self.valid = True
         self.ref = True
         self.dirty = True if 'W' in mode else False
+
+        self.aging = 0
 
     def refresh(self):
         self.ref = False
@@ -22,6 +23,7 @@ class PageTableEntry(object):
         self.valid = False
         self.ref = False
         self.dirty = False
+        self.aging = 0
 
     def refer(self, mode):
         self.ref = True
@@ -159,4 +161,19 @@ class PageTable(object):
                 self.fifo[i].ref = False
                 i = (i+1) % self.frames
 
-    def aging
+    def aging(self):
+        lowest = 256
+        oldest = None
+        for frame in self.frame_table:
+            if frame.aging < lowest:
+                oldest = frame
+                lowest = frame.aging
+            # TODO: tie-breaker
+        return oldest
+
+    def update_ages(self):
+        # go through each frame and update their aging counters
+        for frame in self.frame_table:
+            frame.aging = (frame.aging >> 1)
+            if frame.ref:
+               frame.aging  = frame.aging | 0b10000000

@@ -8,7 +8,7 @@ MAX_PAGES = ADDR_SIZE // PAGE_SIZE
 
 # Initialize stuff
 trace_file = 'gcc.trace'
-refresh_rate = 1000
+refresh_rate = 100
 
 frame_table = [None] * MAX_FRAMES
 
@@ -21,7 +21,7 @@ def parse_trace(line):
 
 
 
-replacement = 'clock'
+replacement = 'aging'
 pt = PageTable(MAX_PAGES, MAX_FRAMES, replacement)
 traces = 0
 
@@ -31,7 +31,10 @@ with open('traces/' + trace_file) as f:
 
         if  traces % refresh_rate == 0:
             print '--{} Traces Complete --'.format(traces)
-            if replacement == 'NRU':
+            if replacement == 'nru':
+                pt.refresh()
+            if replacement == 'aging':
+                pt.update_ages()
                 pt.refresh()
 
         addr, mode = parse_trace(line)
