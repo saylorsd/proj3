@@ -3,20 +3,13 @@ MAX_FRAMES = 10
 ADDR_SIZE = 2 ** 32
 PAGE_SIZE = 4 * (2 ** 10)
 MAX_PAGES = ADDR_SIZE // PAGE_SIZE
+hits = 0
+faults = 0
 
 # Initialize stuff
 trace_file = 'bzip.trace'
 page_table = [None] * MAX_PAGES
 frame_table = [None] * MAX_FRAMES
-'''
-pte = {
-    'page': '',
-    'dirty': '',
-    'ref': '',
-    'valid' ''
-}
-'''
-
 
 def parse_trace(line):
     addr, mode = line.rstrip('\n').split(' ')
@@ -31,22 +24,54 @@ def split_virtual_address(addr):
 
 
 def map_address(addr, mode):
+    '''
+    Adds address
+
+    returns:
+        hit, frame  (if it's a hit, and frame number)
+    '''
     page_num, offset = split_virtual_address(addr)
     # check page table for page's PTE
-    pte = page_table[page_num]
 
     # if it's not loaded into a frame
-    if pte is None:
+    if page_table[page_num] is None:
+        # make new PTE for it
         page_table[page_num] = {
             'frame': get_frame(),
             'dirty': True if 'w' in mode else False,
             'ref': True,
-            'valid': True
+            'valid': True,
+            'page' : page_num,
+            'offset': offset,
+            'addr': addr
         }
+        hit = False
+    # else, it's already loaded into the frame
+    else:
+        hit = True
+        hits += 1
+
+    # copy pte to frame list
+    frame_table[page_table[page_num]['frame']] = page_table[page_num]
+
+    return hit, page_table[page_num]['frame']
 
 
 def get_frame():
-    pass
+    # cycle through frames
+    reffed = []
+    unreffed = []
+    for i in range(len(frame_table)):
+        if frame_table[i] is None:
+            return i
+        elif frame_table[i]['ref']:
+            reffed.append(i)
+        else:
+            unreffed.append(i)
+    if len(unreffed)>0:
+        return unreffed[0]
+    else :
+        return reffed[0]
 
 
 def evict():
