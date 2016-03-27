@@ -1,24 +1,30 @@
+import sys
 from PageTable import PageTable, PageTableEntry
-
 
 def parse_trace(line):
     addr, mode = line.rstrip('\n').split(' ')
     addr = int(addr, 16)
     return addr, mode
 
-
-trace_file = 'bzip.trace'
+args = sys.argv
 
 # Constants
-MAX_FRAMES = 8
 ADDR_SIZE = 2 ** 32
 PAGE_SIZE = 4 * (2 ** 10)
 MAX_PAGES = ADDR_SIZE // PAGE_SIZE
+frames = 0
+replacement = ''
 
-# Options
-refresh_rate = 10000
+for i in range(len(args)):
+    if '-n' in args[i]:
+        frames = int(args[i+1])
+    if '-a' in args[i]:
+        replacement = args[i+1]
+    if '-r' in args[i]:
+        refresh_rate = int(args[i+1])
 
-replacement = 'opt'
+trace_file = args[-1]
+
 traces = 0
 
 opt_pages = [[] for _ in range(MAX_PAGES)]
@@ -34,13 +40,13 @@ if 'opt' in replacement:
             i += 1
     print 'Done!\n'
 
-pt = PageTable(MAX_PAGES, MAX_FRAMES, replacement, opt_pages)
+pt = PageTable(MAX_PAGES, frames, replacement, opt_pages)
 
 with open('traces/' + trace_file) as f:
     for line in (f):
         traces += 1
         if traces % refresh_rate == 0:
-            print '--{} Traces Complete --'.format(traces)
+            # print '--{} Traces Complete --'.format(traces)
             if replacement == 'nru':
                 pt.refresh()
             if replacement == 'aging':
@@ -54,7 +60,7 @@ with open('traces/' + trace_file) as f:
 
     print '\nSTATS\n===='
     print  replacement.upper()
-    print 'Frames:\t {}'.format(MAX_FRAMES)
+    print 'Frames:\t {}'.format(frames)
     print 'Traces:\t {}'.format(traces)
     print 'Hits:\t {}'.format(pt.hits)
     print 'Faults:\t {}'.format(pt.faults)
