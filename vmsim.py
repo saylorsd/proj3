@@ -1,18 +1,5 @@
 from PageTable import PageTable, PageTableEntry
 
-# Constants
-MAX_FRAMES = 8
-ADDR_SIZE = 2 ** 32
-PAGE_SIZE = 4 * (2 ** 10)
-MAX_PAGES = ADDR_SIZE // PAGE_SIZE
-
-# Initialize stuff
-trace_file = 'gcc.trace'
-refresh_rate = 100
-
-frame_table = [None] * MAX_FRAMES
-
-
 
 def parse_trace(line):
     addr, mode = line.rstrip('\n').split(' ')
@@ -20,16 +7,39 @@ def parse_trace(line):
     return addr, mode
 
 
+trace_file = 'bzip.trace'
 
-replacement = 'aging'
-pt = PageTable(MAX_PAGES, MAX_FRAMES, replacement)
+# Constants
+MAX_FRAMES = 8
+ADDR_SIZE = 2 ** 32
+PAGE_SIZE = 4 * (2 ** 10)
+MAX_PAGES = ADDR_SIZE // PAGE_SIZE
+
+# Options
+refresh_rate = 10000
+
+replacement = 'opt'
 traces = 0
+
+opt_pages = [[] for _ in range(MAX_PAGES)]
+
+# preprocess trace for opt
+if 'opt' in replacement:
+    print 'Preprocessing file for OPT...'
+    i = 0
+    with open('traces/' + trace_file) as f:
+        for line in f:
+            addr, mode = parse_trace(line)
+            opt_pages[addr//PAGE_SIZE].append(i)
+            i += 1
+    print 'Done!\n'
+
+pt = PageTable(MAX_PAGES, MAX_FRAMES, replacement, opt_pages)
 
 with open('traces/' + trace_file) as f:
     for line in (f):
         traces += 1
-
-        if  traces % refresh_rate == 0:
+        if traces % refresh_rate == 0:
             print '--{} Traces Complete --'.format(traces)
             if replacement == 'nru':
                 pt.refresh()
@@ -41,9 +51,10 @@ with open('traces/' + trace_file) as f:
         page = addr // PAGE_SIZE
         pt.load_page(page, mode)
 
+
     print '\nSTATS\n===='
-    print  replacement.capitalize()
-    print 'Number of Frames:\t {}'.format(MAX_FRAMES)
+    print  replacement.upper()
+    print 'Frames:\t {}'.format(MAX_FRAMES)
     print 'Traces:\t {}'.format(traces)
     print 'Hits:\t {}'.format(pt.hits)
     print 'Faults:\t {}'.format(pt.faults)

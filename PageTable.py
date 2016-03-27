@@ -31,9 +31,10 @@ class PageTableEntry(object):
             self.dirty = True
 
 class PageTable(object):
-    def __init__(self, pages, frames, pr_method):
+    def __init__(self, pages, frames, pr_method, opt_list=None):
         self.size = pages
         self.frames = frames
+        self.trace_count = 0
         self.page_table = [None] * pages
         self.frame_table = [None] * frames
         self.empty_frames = frames
@@ -48,6 +49,7 @@ class PageTable(object):
         # Replacement-specific data structures
         self.fifo = [None for x in range(frames)]
         self.clock_ptr = 0
+        self.opt_list=opt_list
 
     def load_page(self, page, mode):
         ''' Takes page # from virtual address and loads it into physical memory
@@ -85,6 +87,8 @@ class PageTable(object):
             self.fifo[self.clock_ptr] = self.page_table[page]
             self.clock_ptr = (self.clock_ptr + 1) % self.frames  # move clock ptr ahead
 
+        self.trace_count += 1
+
 
 
     def evict(self):
@@ -111,9 +115,6 @@ class PageTable(object):
         else:
             return pte.frame is not None
 
-
-        return self.page_table[page].frame is not None
-
     def refresh(self):
         ''' Refreshes all loaded pages
         '''
@@ -123,15 +124,6 @@ class PageTable(object):
             except:
                 continue
 
-    def is_valid(self, page):
-        ''' Checks validity of page
-        '''
-        return self.page_table[page].valid
-
-    def get_frame(self, page):
-        ''' Gets frame number for page
-        '''
-        return self.page_table[page].frame
 
     '''
     PAGE REPLACEMENT ALGORITHMS
@@ -164,10 +156,10 @@ class PageTable(object):
     def aging(self):
         lowest = 256
         oldest = None
-        for frame in self.frame_table:
-            if frame.aging < lowest:
-                oldest = frame
-                lowest = frame.aging
+        for page in self.frame_table:
+            if page.aging < lowest:
+                oldest = page
+                lowest = page.aging
             # TODO: tie-breaker
         return oldest
 
@@ -177,3 +169,25 @@ class PageTable(object):
             frame.aging = (frame.aging >> 1)
             if frame.ref:
                frame.aging  = frame.aging | 0b10000000
+
+    def opt(self):
+        longest = 0
+        evicted_page = None
+        count = self.trace_count
+        for page in self.frame_table:
+            score = self.get_opt_score(page.page)
+            if score > longest:
+                longest = score
+                evicted_page = page
+
+        return evicted_page
+
+
+    def get_opt_score(self, page_num):
+        while(len(self.opt_list[page_num])):
+            timing = self.opt_list[page_num].pop(0)
+            score = timing - self.trace_count
+            if score > 0:
+                return score
+
+        return len(self.opt_list) + 1
