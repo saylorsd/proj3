@@ -8,7 +8,7 @@ class PageTableEntry(object):
         self.frame = None
 
         self.valid = True
-        self.ref = True
+        self.ref = False
         self.dirty = True if 'W' in mode else False
 
         self.aging = 0
@@ -34,7 +34,7 @@ class PageTable(object):
     def __init__(self, pages, frames, pr_method, opt_list=None):
         self.size = pages
         self.frames = frames
-        self.trace_count = 0
+        self.trace_count = 1
         self.page_table = [None] * pages
         self.frame_table = [None] * frames
         self.empty_frames = frames
@@ -43,11 +43,12 @@ class PageTable(object):
         self.hits = 0
         self.faults = 0
         self.disk_writes = 0
+        self.first_access = 0
 
         self.pr_method = pr_method  # method of page-replacemnt to use during evictions
 
         # Replacement-specific data structures
-        self.fifo = [None for x in range(frames)]
+        self.clock_list = [None for x in range(frames)]
         self.clock_ptr = 0
         self.opt_list=opt_list
 
@@ -58,6 +59,7 @@ class PageTable(object):
         if self.search_frame_table(page):
             self.page_table[page].refer(mode)
             self.hits += 1
+            self.trace_count += 1
             return
 
         # if no space in RAM, we need to use a page replacement algorithm to pick what to evict
@@ -65,36 +67,40 @@ class PageTable(object):
             evicted = self.evict()  # page to be evicted
             cleared_frame = evicted.frame
             evicted.reset()
+        # compulsory fault
         else:
             cleared_frame = self.get_empty_frame()
             self.empty_frames -= 1
 
         self.faults += 1
 
-        # Create PTE for current attemp at loading address
-        temp_page = PageTableEntry(page, mode)
-        temp_page.frame = cleared_frame
-        temp_page.valid = True
-        temp_page.ref = True
+        #If not already in page table, make it
+        if self.page_table[page] is None:
+            self.page_table[page] = PageTableEntry(page, mode)
 
-        # add page to page and frame tables
-        self.page_table[page] = deepcopy(temp_page)
+        self.page_table[page].frame = cleared_frame
+        self.page_table[page].valid = True
+        self.page_table[page].ref = True
+        self.page_table[page].dirty = True if 'W' in mode else False
+
+        # reference page in frame tables
         self.frame_table[cleared_frame] = self.page_table[page]
 
         # if using clock, add this new page to where hand is pointing
         # if there wasn't a free frame, evict() will have moved ptr to frame to evict
         if 'clock' in self.pr_method:
-            self.fifo[self.clock_ptr] = self.page_table[page]
+            self.clock_list[self.clock_ptr] = self.page_table[page]
             self.clock_ptr = (self.clock_ptr + 1) % self.frames  # move clock ptr ahead
 
         self.trace_count += 1
-
+        return
 
 
     def evict(self):
         ''' Choose which frame needs to be evicted when a page fault occurs
         '''
         evicted_frame = getattr(self, self.pr_method)()
+        #print "EVICTED: {}".format(evicted_frame.frame)
         if evicted_frame.dirty:
             self.disk_writes += 1
         return evicted_frame
@@ -111,6 +117,7 @@ class PageTable(object):
     def search_frame_table(self, page):
         pte = self.page_table[page]
         if pte is None:
+            self.first_access +=1
             return False
         else:
             return pte.frame is not None
@@ -146,11 +153,11 @@ class PageTable(object):
     def clock(self):
         i = self.clock_ptr
         while(1):
-            if not self.fifo[i].ref:
+            if not self.clock_list[i].ref:
                 self.clock_ptr = i
-                return self.fifo[i]
+                return self.clock_list[i]
             else:
-                self.fifo[i].ref = False
+                self.clock_list[i].ref = False
                 i = (i+1) % self.frames
 
     def aging(self):
@@ -160,7 +167,6 @@ class PageTable(object):
             if page.aging < lowest:
                 oldest = page
                 lowest = page.aging
-            # TODO: tie-breaker
         return oldest
 
     def update_ages(self):
@@ -171,23 +177,24 @@ class PageTable(object):
                frame.aging  = frame.aging | 0b10000000
 
     def opt(self):
-        longest = 0
+        farthest = 0
         evicted_page = None
-        count = self.trace_count
         for page in self.frame_table:
-            score = self.get_opt_score(page.page)
-            if score > longest:
-                longest = score
+            steps_ahead = self.get_opt_score(page.page)
+
+            if steps_ahead > farthest:
+                farthest = steps_ahead
                 evicted_page = page
 
         return evicted_page
 
-
     def get_opt_score(self, page_num):
         while(len(self.opt_list[page_num])):
-            timing = self.opt_list[page_num].pop(0)
+            timing = self.opt_list[page_num][0]
             score = timing - self.trace_count
             if score > 0:
                 return score
+            else:
+                self.opt_list[page_num].pop(0)
 
-        return len(self.opt_list) + 1
+        return float('inf')

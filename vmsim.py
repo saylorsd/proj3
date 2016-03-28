@@ -13,6 +13,7 @@ ADDR_SIZE = 2 ** 32
 PAGE_SIZE = 4 * (2 ** 10)
 MAX_PAGES = ADDR_SIZE // PAGE_SIZE
 frames = 0
+traces = 0
 replacement = ''
 
 for i in range(len(args)):
@@ -25,24 +26,30 @@ for i in range(len(args)):
 
 trace_file = args[-1]
 
-traces = 0
+
+
 
 opt_pages = [[] for _ in range(MAX_PAGES)]
-
 # preprocess trace for opt
 if 'opt' in replacement:
+
     print 'Preprocessing file for OPT...'
-    i = 0
-    with open('traces/' + trace_file) as f:
+    i = 1
+    with open(trace_file) as f:
         for line in f:
             addr, mode = parse_trace(line)
             opt_pages[addr//PAGE_SIZE].append(i)
             i += 1
     print 'Done!\n'
+opt_size =0
+for item in opt_pages:
+    if len(item) > 0:
+        opt_size+=1
 
+print opt_size
 pt = PageTable(MAX_PAGES, frames, replacement, opt_pages)
 
-with open('traces/' + trace_file) as f:
+with open(trace_file) as f:
     for line in (f):
         traces += 1
         if traces % refresh_rate == 0:
@@ -61,7 +68,10 @@ with open('traces/' + trace_file) as f:
     print '\nSTATS\n===='
     print  replacement.upper()
     print 'Frames:\t {}'.format(frames)
-    print 'Traces:\t {}'.format(traces)
-    print 'Hits:\t {}'.format(pt.hits)
-    print 'Faults:\t {}'.format(pt.faults)
-    print 'Writes:\t {}'.format(pt.disk_writes)
+    print 'Traces:\t {:>7}'.format(traces)
+    print 'Hits:\t {:>7}'.format(pt.hits)
+    print 'Faults:\t {:>7}'.format(pt.faults)
+    print 'Writes:\t {:>7}'.format(pt.disk_writes)
+
+
+    print pt.first_access
